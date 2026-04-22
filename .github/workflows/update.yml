@@ -40,6 +40,11 @@ jobs:
       - run: go run ./cmd/ionet/main.go
         continue-on-error: true
 
+      - run: go run ./cmd/kimi/main.go
+        continue-on-error: true
+        env:
+          KIMI_CODING_API_KEY: ${{ secrets.KIMI_CODING_API_KEY }}
+
       - run: go run ./cmd/opencode-go/main.go
         continue-on-error: true
 
