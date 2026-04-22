@@ -42,12 +42,17 @@ type ModelLimit struct {
 	Output  int64 `json:"output"`
 }
 
+type Interleaved struct {
+	Field string `json:"field"`
+}
+
 type ModelEnrichment struct {
-	Name       string      `json:"name"`
-	Attachment bool        `json:"attachment"`
-	Reasoning  bool        `json:"reasoning"`
-	Cost       PricingData `json:"cost"`
-	Limit      ModelLimit  `json:"limit"`
+	Name        string       `json:"name"`
+	Attachment  bool         `json:"attachment"`
+	Reasoning   bool         `json:"reasoning"`
+	Cost        PricingData  `json:"cost"`
+	Limit       ModelLimit   `json:"limit"`
+	Interleaved *Interleaved `json:"interleaved,omitzero"`
 }
 
 func fetchZenModels() ([]ZenModel, error) {
@@ -185,6 +190,15 @@ func main() {
 			CanReason:              canReason,
 			ReasoningLevels:        reasoningLevels,
 			DefaultReasoningEffort: defaultReasoningEffort,
+		}
+
+		if hasEnrichment && enrichment.Interleaved != nil {
+			switch enrichment.Interleaved.Field {
+			case "reasoning_content":
+				m.Features = []catwalk.ModelSpecialFeatures{catwalk.InterleavedReasoningContent}
+			case "reasoning_details":
+				m.Features = []catwalk.ModelSpecialFeatures{catwalk.InterleavedReasoningDetails}
+			}
 		}
 
 		zenProvider.Models = append(zenProvider.Models, m)

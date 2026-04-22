@@ -28,13 +28,18 @@ type ModelLimit struct {
 	Output  int64 `json:"output"`
 }
 
+type Interleaved struct {
+	Field string `json:"field"`
+}
+
 type GoModel struct {
-	ID         string      `json:"id"`
-	Name       string      `json:"name"`
-	Attachment bool        `json:"attachment"`
-	Reasoning  bool        `json:"reasoning"`
-	Cost       PricingData `json:"cost"`
-	Limit      ModelLimit  `json:"limit"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Attachment  bool         `json:"attachment"`
+	Reasoning   bool         `json:"reasoning"`
+	Cost        PricingData  `json:"cost"`
+	Limit       ModelLimit   `json:"limit"`
+	Interleaved *Interleaved `json:"interleaved,omitzero"`
 }
 
 type GoProviderData struct {
@@ -118,6 +123,15 @@ func main() {
 			CanReason:              goModel.Reasoning,
 			ReasoningLevels:        reasoningLevels,
 			DefaultReasoningEffort: defaultReasoningEffort,
+		}
+
+		if goModel.Interleaved != nil {
+			switch goModel.Interleaved.Field {
+			case "reasoning_content":
+				m.Features = []catwalk.ModelSpecialFeatures{catwalk.InterleavedReasoningContent}
+			case "reasoning_details":
+				m.Features = []catwalk.ModelSpecialFeatures{catwalk.InterleavedReasoningDetails}
+			}
 		}
 
 		goProvider.Models = append(goProvider.Models, m)
