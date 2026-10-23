@@ -1,31 +1,30 @@
-package v2compat
+package catwalk
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
-
-	"charm.land/catwalk/pkg/catwalk"
 )
 
-func TestFromModel(t *testing.T) {
-	m := catwalk.Model{
+func TestModelToV2(t *testing.T) {
+	m := Model{
 		ID:               "gpt-6-astra",
-		Type:             catwalk.TypeResponses,
+		Type:             TypeResponses,
 		Name:             "GPT-6 Astra",
-		Pricing:          catwalk.Pricing{Input: 10, Output: 50, CacheCreate: 12.5, CacheHit: 1},
+		Pricing:          Pricing{Input: 10, Output: 50, CacheCreate: 12.5, CacheHit: 1},
 		ContextWindow:    1050000,
 		DefaultMaxTokens: 128000,
-		Reasoning: catwalk.Reasoning{
-			Thinking:           catwalk.ThinkingToggleable,
-			EffortLevels:       catwalk.NewEffortLevels("low", "medium", "high"),
+		Reasoning: Reasoning{
+			Thinking:           ThinkingToggleable,
+			EffortLevels:       NewEffortLevels("low", "medium", "high"),
 			DefaultEffortLevel: "medium",
 		},
-		Capabilities:   catwalk.Capabilities{Vision: true},
+		Capabilities:   Capabilities{Vision: true},
 		MaxAttachments: 1500,
 	}
 
-	v2 := FromModel(m)
+	v2 := m.ToV2()
 	if v2.CostPer1MIn != 10 || v2.CostPer1MOut != 50 {
 		t.Errorf("pricing mismatch: got in=%v out=%v", v2.CostPer1MIn, v2.CostPer1MOut)
 	}
@@ -52,17 +51,17 @@ func TestFromModel(t *testing.T) {
 	}
 }
 
-func TestFromModelNeverThinks(t *testing.T) {
-	m := catwalk.Model{
+func TestModelToV2NeverThinks(t *testing.T) {
+	m := Model{
 		ID:               "gpt-4.1",
 		Name:             "GPT-4.1",
-		Pricing:          catwalk.Pricing{Input: 2, Output: 8},
+		Pricing:          Pricing{Input: 2, Output: 8},
 		ContextWindow:    1047576,
 		DefaultMaxTokens: 16384,
-		Reasoning:        catwalk.Reasoning{Thinking: catwalk.ThinkingNever},
+		Reasoning:        Reasoning{Thinking: ThinkingNever},
 	}
 
-	v2 := FromModel(m)
+	v2 := m.ToV2()
 	if v2.CanReason {
 		t.Error("expected CanReason to be false")
 	}
@@ -77,28 +76,28 @@ func TestFromModelNeverThinks(t *testing.T) {
 	}
 }
 
-func TestFromProviderDropsV3OnlyFields(t *testing.T) {
-	p := catwalk.Provider{
+func TestProviderToV2DropsV3OnlyFields(t *testing.T) {
+	p := Provider{
 		Name:                  "OpenAI",
-		ID:                    catwalk.InferenceProviderOpenAI,
+		ID:                    InferenceProviderOpenAI,
 		APIKey:                "$OPENAI_API_KEY",
 		SessionAffinityHeader: "x-opencode-session",
 		DefaultLargeModelID:   "gpt-5.6-sol",
 		DefaultSmallModelID:   "gpt-5.6-luna",
-		Models: []catwalk.Model{{
+		Models: []Model{{
 			ID:               "gpt-5.6-sol",
-			Type:             catwalk.TypeResponses,
+			Type:             TypeResponses,
 			Name:             "GPT-5.6 Sol",
-			Pricing:          catwalk.Pricing{Input: 4, Output: 20, CacheCreate: 5, CacheHit: 0.4},
+			Pricing:          Pricing{Input: 4, Output: 20, CacheCreate: 5, CacheHit: 0.4},
 			ContextWindow:    1050000,
 			DefaultMaxTokens: 128000,
-			Reasoning:        catwalk.Reasoning{Thinking: catwalk.ThinkingAlways},
-			Capabilities:     catwalk.Capabilities{Vision: true},
+			Reasoning:        Reasoning{Thinking: ThinkingAlways},
+			Capabilities:     Capabilities{Vision: true},
 			MaxAttachments:   1500,
 		}},
 	}
 
-	v2 := FromProvider(p)
+	v2 := p.ToV2()
 	if len(v2.Models) != 1 {
 		t.Fatalf("expected 1 model, got %d", len(v2.Models))
 	}
@@ -126,13 +125,44 @@ func TestFromProviderDropsV3OnlyFields(t *testing.T) {
 	}
 }
 
-func TestFromProvidersPreservesOrder(t *testing.T) {
-	ps := []catwalk.Provider{
-		{Name: "Z", ID: catwalk.InferenceProviderZAI},
-		{Name: "A", ID: catwalk.InferenceProviderOpenAI},
+func TestToV2ProvidersPreservesOrder(t *testing.T) {
+	ps := []Provider{
+		{Name: "Z", ID: InferenceProviderZAI},
+		{Name: "A", ID: InferenceProviderOpenAI},
 	}
-	v2 := FromProviders(ps)
-	if len(v2) != 2 || v2[0].ID != catwalk.InferenceProviderZAI || v2[1].ID != catwalk.InferenceProviderOpenAI {
+	v2 := ToV2Providers(ps)
+	if len(v2) != 2 || v2[0].ID != InferenceProviderZAI || v2[1].ID != InferenceProviderOpenAI {
 		t.Fatalf("order not preserved: %+v", v2)
+	}
+}
+
+func TestV2RoundTrip(t *testing.T) {
+	models := []Model{
+		{ID: "never", Name: "Never", Pricing: Pricing{Input: 1, Output: 2, CacheCreate: 3, CacheHit: 4}, ContextWindow: 100, DefaultMaxTokens: 10,
+			Reasoning: Reasoning{Thinking: ThinkingNever}, Capabilities: Capabilities{Vision: true}},
+		{ID: "always", Name: "Always", Reasoning: Reasoning{Thinking: ThinkingAlways}},
+		{ID: "toggle", Name: "Toggle", Reasoning: Reasoning{Thinking: ThinkingToggleable, EffortLevels: NewEffortLevels("low", "high"), DefaultEffortLevel: "high"}},
+	}
+	for _, m := range models {
+		got := m.ToV2().ToModel()
+		if !reflect.DeepEqual(got, m) {
+			t.Errorf("%s: round trip changed the model:\n got  %+v\n want %+v", m.ID, got, m)
+		}
+	}
+}
+
+func TestV2ReasoningWithoutLevelsReadsAsAlways(t *testing.T) {
+	got := ModelV2{ID: "x", CanReason: true}.ToModel()
+	if got.Reasoning.Thinking != ThinkingAlways || len(got.Reasoning.EffortLevels) != 0 {
+		t.Fatalf("got %+v", got.Reasoning)
+	}
+}
+
+func TestV2ProviderToProvider(t *testing.T) {
+	v2 := ProviderV2{Name: "P", ID: "p", APIEndpoint: "https://x", Type: TypeCompletions, DefaultLargeModelID: "a", DefaultHeaders: map[string]string{"h": "v"},
+		Models: []ModelV2{{ID: "a", Name: "A", CostPer1MIn: 2}}}
+	p := v2.ToProvider()
+	if p.ID != "p" || p.APIEndpoint != "https://x" || p.DefaultLargeModelID != "a" || p.DefaultHeaders["h"] != "v" || len(p.Models) != 1 || p.Models[0].Pricing.Input != 2 {
+		t.Fatalf("got %+v", p)
 	}
 }
