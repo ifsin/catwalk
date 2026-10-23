@@ -23,8 +23,11 @@ import (
 const (
 	// ClientID is the public OAuth client of the Copilot editor plugins.
 	ClientID = "Iv1.b507a08c87ecfe98"
-	// APIBaseURL is the Copilot API.
+	// APIBaseURL is the Copilot API when the token response names none.
 	APIBaseURL = "https://api.githubcopilot.com"
+	// APIEndpoint is the Credential.Extra key of the API endpoint that the
+	// token response assigned to the account.
+	APIEndpoint = "api_endpoint"
 
 	deviceCodeURL   = "https://github.com/login/device/code"
 	accessTokenURL  = "https://github.com/login/oauth/access_token"
@@ -132,8 +135,12 @@ func (a *Auth) Refresh(ctx context.Context, c *catwalk.Credential) (*catwalk.Cre
 
 // Request implements catwalk.Authenticator.
 func (a *Auth) Request(c *catwalk.Credential) catwalk.Request {
+	base := APIBaseURL
+	if endpoint := c.Extra[APIEndpoint]; endpoint != "" {
+		base = endpoint
+	}
 	return catwalk.Request{
-		BaseURL: APIBaseURL,
+		BaseURL: base,
 		APIKey:  c.AccessToken,
 		Headers: map[string]string{
 			"User-Agent":             userAgent,
@@ -153,6 +160,9 @@ func (a *Auth) copilotToken(ctx context.Context, githubToken string) (*catwalk.C
 	var resp struct {
 		Token     string `json:"token"`
 		ExpiresAt int64  `json:"expires_at"`
+		Endpoints struct {
+			API string `json:"api"`
+		} `json:"endpoints"`
 	}
 	if err := auth.GetJSON(ctx, a.HTTPClient, a.copilotTokenURL, &resp, h); err != nil {
 		var te *auth.TokenError
@@ -164,12 +174,16 @@ func (a *Auth) copilotToken(ctx context.Context, githubToken string) (*catwalk.C
 	if resp.Token == "" {
 		return nil, fmt.Errorf("copilot token response contained no token")
 	}
-	return &catwalk.Credential{
+	cred := &catwalk.Credential{
 		Provider:     catwalk.InferenceProviderCopilot,
 		AccessToken:  resp.Token,
 		RefreshToken: githubToken,
 		ExpiresAt:    resp.ExpiresAt,
-	}, nil
+	}
+	if resp.Endpoints.API != "" {
+		cred.Extra = map[string]string{APIEndpoint: resp.Endpoints.API}
+	}
+	return cred, nil
 }
 
 func headers() http.Header {

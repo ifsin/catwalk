@@ -48,7 +48,7 @@ func newServer(t *testing.T) (*Auth, *server) {
 				w.WriteHeader(s.tokenStatus)
 				return
 			}
-			_, _ = w.Write([]byte(`{"token":"copilot-token","expires_at":4102444800}`))
+			_, _ = w.Write([]byte(`{"token":"copilot-token","expires_at":4102444800,"endpoints":{"api":"https://api.business.githubcopilot.com"}}`))
 		}
 	}))
 	t.Cleanup(s.Close)
@@ -77,7 +77,7 @@ func TestDeviceSignIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cred.AccessToken != "copilot-token" || cred.RefreshToken != "gh-token" || cred.ExpiresAt != 4102444800 || cred.Provider != "copilot" {
+	if cred.AccessToken != "copilot-token" || cred.RefreshToken != "gh-token" || cred.ExpiresAt != 4102444800 || cred.Provider != "copilot" || cred.Extra[APIEndpoint] != "https://api.business.githubcopilot.com" {
 		t.Errorf("credential = %+v", cred)
 	}
 	if s.githubAuth != "Bearer gh-token" {
@@ -164,4 +164,15 @@ func TestRequestInitiator(t *testing.T) {
 			t.Errorf("X-Initiator = %q", rec.req.Header.Get("X-Initiator"))
 		}
 	})
+}
+
+func TestRequestUsesAccountEndpoint(t *testing.T) {
+	a := New()
+	if got := a.Request(&catwalk.Credential{AccessToken: "t"}).BaseURL; got != APIBaseURL {
+		t.Errorf("default endpoint = %q", got)
+	}
+	got := a.Request(&catwalk.Credential{AccessToken: "t", Extra: map[string]string{APIEndpoint: "https://api.business.githubcopilot.com"}}).BaseURL
+	if got != "https://api.business.githubcopilot.com" {
+		t.Errorf("account endpoint = %q", got)
+	}
 }

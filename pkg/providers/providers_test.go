@@ -3,38 +3,50 @@ package providers
 import (
 	"testing"
 
-	"charm.land/catwalk/pkg/auth"
 	"charm.land/catwalk/pkg/catwalk"
 )
 
-func TestLookup(t *testing.T) {
+func TestAuth(t *testing.T) {
 	tests := []struct {
 		id    catwalk.InferenceProvider
-		kinds []auth.Kind
+		kinds []catwalk.Kind
 	}{
-		{catwalk.InferenceProviderOpenAI, []auth.Kind{auth.KindBrowser}},
-		{catwalk.InferenceProviderCopilot, []auth.Kind{auth.KindDevice}},
-		{catwalk.InferenceProviderXAI, []auth.Kind{auth.KindBrowser, auth.KindDevice}},
-		{"hyper", []auth.Kind{auth.KindDevice}},
+		{catwalk.InferenceProviderOpenAI, []catwalk.Kind{catwalk.KindBrowser}},
+		{catwalk.InferenceProviderCopilot, []catwalk.Kind{catwalk.KindDevice}},
+		{catwalk.InferenceProviderXAI, []catwalk.Kind{catwalk.KindBrowser, catwalk.KindDevice}},
+		{"hyper", []catwalk.Kind{catwalk.KindDevice}},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.id), func(t *testing.T) {
-			a, ok := Lookup(tt.id)
-			if !ok {
+			a := (catwalk.Provider{ID: tt.id}).Auth()
+			if a == nil {
 				t.Fatal("no authenticator")
 			}
 			if a.Provider() != tt.id {
 				t.Errorf("Provider() = %q", a.Provider())
 			}
 			for _, k := range tt.kinds {
-				if !auth.Supports(a, k) {
+				if !catwalk.Supports(a, k) {
 					t.Errorf("does not support %s", k)
 				}
 			}
 		})
 	}
 
-	if _, ok := Lookup(catwalk.InferenceProviderAnthropic); ok {
+	if (catwalk.Provider{ID: catwalk.InferenceProviderAnthropic}).Auth() != nil {
 		t.Error("anthropic has no sign-in")
+	}
+}
+
+func TestLister(t *testing.T) {
+	for _, id := range []catwalk.InferenceProvider{catwalk.InferenceProviderOpenAI, catwalk.InferenceProviderCopilot, catwalk.InferenceProviderXAI, "hyper"} {
+		if (catwalk.Provider{ID: id}).Lister() == nil {
+			t.Errorf("%s has no lister", id)
+		}
+	}
+	for _, id := range []catwalk.InferenceProvider{catwalk.InferenceProviderGemini, catwalk.InferenceProviderBedrock} {
+		if (catwalk.Provider{ID: id, Type: catwalk.TypeCompletions}).Lister() != nil {
+			t.Errorf("%s should have no lister", id)
+		}
 	}
 }
