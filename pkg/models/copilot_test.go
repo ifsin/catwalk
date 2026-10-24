@@ -32,3 +32,18 @@ func TestModelsKeepPickerChatModels(t *testing.T) {
 		t.Fatalf("bad %+v", got[1])
 	}
 }
+
+func TestModelsDropOnlyDisabledPolicy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"on","model_picker_enabled":true,"policy":{"state":"enabled"},"capabilities":{"type":"chat"}},
+			{"id":"unset","model_picker_enabled":true,"policy":{"state":"unconfigured"},"capabilities":{"type":"chat"}},
+			{"id":"blocked","model_picker_enabled":true,"policy":{"state":"disabled"},"capabilities":{"type":"chat"}},
+			{"id":"nopolicy","model_picker_enabled":true,"capabilities":{"type":"chat"}}]}`))
+	}))
+	defer srv.Close()
+	got, err := Copilot{}.Models(context.Background(), catwalk.Source{Auth: catwalk.AuthSignIn, BaseURL: srv.URL, APIKey: "tok"})
+	if err != nil || len(got) != 3 || got[0].ID != "on" || got[1].ID != "unset" || got[2].ID != "nopolicy" {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}

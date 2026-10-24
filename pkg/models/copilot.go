@@ -9,9 +9,12 @@ import (
 
 type copilotList struct {
 	Data []struct {
-		ID                 string   `json:"id"`
-		Name               string   `json:"name"`
-		ModelPickerEnabled bool     `json:"model_picker_enabled"`
+		ID                 string `json:"id"`
+		Name               string `json:"name"`
+		ModelPickerEnabled bool   `json:"model_picker_enabled"`
+		Policy             *struct {
+			State string `json:"state"`
+		} `json:"policy"`
 		SupportedEndpoints []string `json:"supported_endpoints"`
 		Capabilities       struct {
 			Type   string `json:"type"`
@@ -32,7 +35,9 @@ type Copilot struct{}
 var _ catwalk.Lister = Copilot{}
 
 // Models implements Lister. Only chat models enabled in the model
-// picker of the account are returned.
+// picker of the account, with a policy that is not disabled, are returned.
+// An unconfigured policy is kept: it means the terms are not accepted yet,
+// not that the model is blocked.
 func (Copilot) Models(ctx context.Context, s catwalk.Source) ([]catwalk.Model, error) {
 	if s.Auth != catwalk.AuthSignIn || s.APIKey == "" {
 		return nil, ErrNotSignedIn
@@ -52,6 +57,9 @@ func (Copilot) Models(ctx context.Context, s catwalk.Source) ([]catwalk.Model, e
 	out := make([]catwalk.Model, 0, len(list.Data))
 	for _, m := range list.Data {
 		if m.ID == "" || !m.ModelPickerEnabled || m.Capabilities.Type != "chat" {
+			continue
+		}
+		if m.Policy != nil && m.Policy.State == "disabled" {
 			continue
 		}
 		model := catwalk.Model{
